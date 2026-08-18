@@ -1,0 +1,13 @@
+#!/bin/sh
+set -eu
+
+repo_root=$(git rev-parse --show-toplevel)
+checker="$repo_root/scripts/check_staged_safety.py"
+venv_python="$repo_root/.venv/Scripts/python.exe"
+
+if [ -x "$venv_python" ]; then
+    PYTHONUTF8=1 exec "$venv_python" "$checker"
+fi
+
+echo "pre-commit: project .venv is required for staged safety checks." >&2
+exit 2

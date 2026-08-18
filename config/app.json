@@ -1,0 +1,22 @@
+{
+  "max_file_size_mb": 25,
+  "max_batch_files": 100,
+  "max_pdf_pages": 50,
+  "pdf_text_min_chars_per_page": 20,
+  "render_dpi": 240,
+  "allowed_extensions": [".pdf", ".png", ".jpg", ".jpeg", ".tif", ".tiff", ".webp"],
+  "required_fields": ["certificate_number", "issuer_name", "issue_date"],
+  "ocr_provider": "none",
+  "vision_fallback_enabled": false,
+  "model_mode": "validation",
+  "data_dir": "data",
+  "auto_pass_confidence": 0.90,
+  "model_confidence_threshold": 0.85,
+  "qwen_concurrency": 2,
+  "glm_concurrency": 4,
+  "arbiter_concurrency": 2,
+  "authenticity_provider": "local_evidence_only",
+  "retain_batches": 20,
+  "issuer_aliases": ["中国测试技术研究院", "中国计量科学研究院"],
+  "field_aliases": {}
+}

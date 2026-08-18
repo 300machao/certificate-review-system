@@ -1,0 +1,256 @@
+{
+  "schema_version": "1.0",
+  "description": "全合成规则异常夹具；不来源于任何真实证书、台账、原件或模型输出。",
+  "synthetic": true,
+  "count": 12,
+  "counts": {
+    "certificate_number_mismatch": 2,
+    "date_mismatch": 2,
+    "factory_serial_number_mismatch": 2,
+    "instrument_name_mismatch": 2,
+    "model_mismatch": 2,
+    "validity_mismatch": 2
+  },
+  "fixtures": [
+    {
+      "fixture_id": "synthetic-anomaly-01",
+      "anomaly_type": "certificate_number_mismatch",
+      "source_sha256": "0000000000000000000000000000000000000000000000000000000000000001",
+      "source_report_id": "DEMO-REPORT-001",
+      "source_unified_number": "DEMO-EQ-001",
+      "target_field": "certificate_number",
+      "original_value": "DEMO-CERT-001",
+      "anomalous_value": "DEMO-CERT-MISMATCH-001",
+      "comparison_input": {
+        "document_value": "DEMO-CERT-MISMATCH-001",
+        "ledger_value": "DEMO-CERT-001"
+      },
+      "expected": {
+        "must_not_auto_pass": true,
+        "acceptable_statuses": ["AUTO_FAILED", "HUMAN_REVIEW"],
+        "risk": "high"
+      },
+      "source_pdf_modified": false
+    },
+    {
+      "fixture_id": "synthetic-anomaly-02",
+      "anomaly_type": "certificate_number_mismatch",
+      "source_sha256": "0000000000000000000000000000000000000000000000000000000000000002",
+      "source_report_id": "DEMO-REPORT-002",
+      "source_unified_number": "DEMO-EQ-002",
+      "target_field": "certificate_number",
+      "original_value": "DEMO-CERT-002",
+      "anomalous_value": "DEMO-CERT-MISMATCH-002",
+      "comparison_input": {
+        "document_value": "DEMO-CERT-MISMATCH-002",
+        "ledger_value": "DEMO-CERT-002"
+      },
+      "expected": {
+        "must_not_auto_pass": true,
+        "acceptable_statuses": ["AUTO_FAILED", "HUMAN_REVIEW"],
+        "risk": "high"
+      },
+      "source_pdf_modified": false
+    },
+    {
+      "fixture_id": "synthetic-anomaly-03",
+      "anomaly_type": "factory_serial_number_mismatch",
+      "source_sha256": "0000000000000000000000000000000000000000000000000000000000000003",
+      "source_report_id": "DEMO-REPORT-003",
+      "source_unified_number": "DEMO-EQ-003",
+      "target_field": "factory_serial_number",
+      "original_value": "DEMO-SN-003",
+      "anomalous_value": "DEMO-SN-MISMATCH-003",
+      "comparison_input": {
+        "document_value": "DEMO-SN-MISMATCH-003",
+        "ledger_value": "DEMO-SN-003"
+      },
+      "expected": {
+        "must_not_auto_pass": true,
+        "acceptable_statuses": ["AUTO_FAILED", "HUMAN_REVIEW"],
+        "risk": "high"
+      },
+      "source_pdf_modified": false
+    },
+    {
+      "fixture_id": "synthetic-anomaly-04",
+      "anomaly_type": "factory_serial_number_mismatch",
+      "source_sha256": "0000000000000000000000000000000000000000000000000000000000000004",
+      "source_report_id": "DEMO-REPORT-004",
+      "source_unified_number": "DEMO-EQ-004",
+      "target_field": "factory_serial_number",
+      "original_value": "DEMO-SN-004",
+      "anomalous_value": "DEMO-SN-MISMATCH-004",
+      "comparison_input": {
+        "document_value": "DEMO-SN-MISMATCH-004",
+        "ledger_value": "DEMO-SN-004"
+      },
+      "expected": {
+        "must_not_auto_pass": true,
+        "acceptable_statuses": ["AUTO_FAILED", "HUMAN_REVIEW"],
+        "risk": "high"
+      },
+      "source_pdf_modified": false
+    },
+    {
+      "fixture_id": "synthetic-anomaly-05",
+      "anomaly_type": "date_mismatch",
+      "source_sha256": "0000000000000000000000000000000000000000000000000000000000000005",
+      "source_report_id": "DEMO-REPORT-005",
+      "source_unified_number": "DEMO-EQ-005",
+      "target_field": "calibrate_or_verify_date",
+      "original_value": "2026-01-05",
+      "anomalous_value": "2026-02-05",
+      "comparison_input": {
+        "document_value": "2026-02-05",
+        "ledger_value": "2026-01-05"
+      },
+      "expected": {
+        "must_not_auto_pass": true,
+        "acceptable_statuses": ["AUTO_FAILED", "HUMAN_REVIEW"],
+        "risk": "high"
+      },
+      "source_pdf_modified": false
+    },
+    {
+      "fixture_id": "synthetic-anomaly-06",
+      "anomaly_type": "date_mismatch",
+      "source_sha256": "0000000000000000000000000000000000000000000000000000000000000006",
+      "source_report_id": "DEMO-REPORT-006",
+      "source_unified_number": "DEMO-EQ-006",
+      "target_field": "calibrate_or_verify_date",
+      "original_value": "2026-01-06",
+      "anomalous_value": "2026-02-06",
+      "comparison_input": {
+        "document_value": "2026-02-06",
+        "ledger_value": "2026-01-06"
+      },
+      "expected": {
+        "must_not_auto_pass": true,
+        "acceptable_statuses": ["AUTO_FAILED", "HUMAN_REVIEW"],
+        "risk": "high"
+      },
+      "source_pdf_modified": false
+    },
+    {
+      "fixture_id": "synthetic-anomaly-07",
+      "anomaly_type": "instrument_name_mismatch",
+      "source_sha256": "0000000000000000000000000000000000000000000000000000000000000007",
+      "source_report_id": "DEMO-REPORT-007",
+      "source_unified_number": "DEMO-EQ-007",
+      "target_field": "equipment_name",
+      "original_value": "DEMO-INSTRUMENT-007",
+      "anomalous_value": "DEMO-OTHER-INSTRUMENT-007",
+      "comparison_input": {
+        "document_value": "DEMO-OTHER-INSTRUMENT-007",
+        "ledger_value": "DEMO-INSTRUMENT-007"
+      },
+      "expected": {
+        "must_not_auto_pass": true,
+        "acceptable_statuses": ["AUTO_FAILED", "HUMAN_REVIEW"],
+        "risk": "high"
+      },
+      "source_pdf_modified": false
+    },
+    {
+      "fixture_id": "synthetic-anomaly-08",
+      "anomaly_type": "instrument_name_mismatch",
+      "source_sha256": "0000000000000000000000000000000000000000000000000000000000000008",
+      "source_report_id": "DEMO-REPORT-008",
+      "source_unified_number": "DEMO-EQ-008",
+      "target_field": "equipment_name",
+      "original_value": "DEMO-INSTRUMENT-008",
+      "anomalous_value": "DEMO-OTHER-INSTRUMENT-008",
+      "comparison_input": {
+        "document_value": "DEMO-OTHER-INSTRUMENT-008",
+        "ledger_value": "DEMO-INSTRUMENT-008"
+      },
+      "expected": {
+        "must_not_auto_pass": true,
+        "acceptable_statuses": ["AUTO_FAILED", "HUMAN_REVIEW"],
+        "risk": "high"
+      },
+      "source_pdf_modified": false
+    },
+    {
+      "fixture_id": "synthetic-anomaly-09",
+      "anomaly_type": "model_mismatch",
+      "source_sha256": "0000000000000000000000000000000000000000000000000000000000000009",
+      "source_report_id": "DEMO-REPORT-009",
+      "source_unified_number": "DEMO-EQ-009",
+      "target_field": "model",
+      "original_value": "DEMO-MODEL-009",
+      "anomalous_value": "DEMO-OTHER-MODEL-009",
+      "comparison_input": {
+        "document_value": "DEMO-OTHER-MODEL-009",
+        "ledger_value": "DEMO-MODEL-009"
+      },
+      "expected": {
+        "must_not_auto_pass": true,
+        "acceptable_statuses": ["AUTO_FAILED", "HUMAN_REVIEW"],
+        "risk": "high"
+      },
+      "source_pdf_modified": false
+    },
+    {
+      "fixture_id": "synthetic-anomaly-10",
+      "anomaly_type": "model_mismatch",
+      "source_sha256": "000000000000000000000000000000000000000000000000000000000000000a",
+      "source_report_id": "DEMO-REPORT-010",
+      "source_unified_number": "DEMO-EQ-010",
+      "target_field": "model",
+      "original_value": "DEMO-MODEL-010",
+      "anomalous_value": "DEMO-OTHER-MODEL-010",
+      "comparison_input": {
+        "document_value": "DEMO-OTHER-MODEL-010",
+        "ledger_value": "DEMO-MODEL-010"
+      },
+      "expected": {
+        "must_not_auto_pass": true,
+        "acceptable_statuses": ["AUTO_FAILED", "HUMAN_REVIEW"],
+        "risk": "high"
+      },
+      "source_pdf_modified": false
+    },
+    {
+      "fixture_id": "synthetic-anomaly-11",
+      "anomaly_type": "validity_mismatch",
+      "source_sha256": "000000000000000000000000000000000000000000000000000000000000000b",
+      "source_report_id": "DEMO-REPORT-011",
+      "source_unified_number": "DEMO-EQ-011",
+      "target_field": "record_valid_until",
+      "original_value": "2027-01-11",
+      "anomalous_value": "2028-01-11",
+      "comparison_input": {
+        "document_value": "2028-01-11",
+        "ledger_value": "2027-01-11"
+      },
+      "expected": {
+        "must_not_auto_pass": true,
+        "acceptable_statuses": ["AUTO_FAILED", "HUMAN_REVIEW"],
+        "risk": "high"
+      },
+      "source_pdf_modified": false
+    },
+    {
+      "fixture_id": "synthetic-anomaly-12",
+      "anomaly_type": "validity_mismatch",
+      "source_sha256": "000000000000000000000000000000000000000000000000000000000000000c",
+      "source_report_id": "DEMO-REPORT-012",
+      "source_unified_number": "DEMO-EQ-012",
+      "target_field": "record_valid_until",
+      "original_value": "2027-01-12",
+      "anomalous_value": "2028-01-12",
+      "comparison_input": {
+        "document_value": "2028-01-12",
+        "ledger_value": "2027-01-12"
+      },
+      "expected": {
+        "must_not_auto_pass": true,
+        "acceptable_statuses": ["AUTO_FAILED", "HUMAN_REVIEW"],
+        "risk": "high"
+      },
+      "source_pdf_modified": false
+    }
+  ]
+}

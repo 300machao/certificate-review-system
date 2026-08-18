@@ -1,0 +1,417 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="外检计量证书信息一致性智能审核系统">
+  <title>外检计量证书智能审核</title>
+  <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+  <a class="skip-link" href="#mainContent">跳到主要内容</a>
+
+  <header class="app-header">
+    <div class="brand-block">
+      <div class="brand-mark" aria-hidden="true"><span></span><span></span><span></span></div>
+      <div>
+        <p class="brand-kicker">计量质量数字化中心</p>
+        <h1>外检计量证书智能审核</h1>
+      </div>
+    </div>
+    <div class="header-meta">
+      <span class="local-badge">本机运行 · 模型调用受控</span>
+      <span id="clock" class="clock" aria-label="当前时间"></span>
+    </div>
+  </header>
+
+  <section class="model-strip" aria-labelledby="modelStripTitle">
+    <div class="model-strip-title">
+      <span class="eyebrow">模型服务</span>
+      <h2 id="modelStripTitle">审核链路状态</h2>
+      <a class="model-settings-link" href="#apiSettings">配置接口</a>
+    </div>
+    <div class="model-statuses">
+      <article class="model-chip" id="modelQwen">
+        <span class="status-light is-checking" aria-hidden="true"></span>
+        <div><strong>千问视觉</strong><small>证书版面与图像识别</small></div>
+        <span class="model-state">检测中</span>
+      </article>
+      <article class="model-chip" id="modelGlm">
+        <span class="status-light is-checking" aria-hidden="true"></span>
+        <div><strong>GLM 5.1</strong><small>语义一致性主审</small></div>
+        <span class="model-state">检测中</span>
+      </article>
+      <article class="model-chip" id="modelDeepseek">
+        <span class="status-light is-checking" aria-hidden="true"></span>
+        <div><strong>DeepSeek V4</strong><small>高风险异构仲裁</small></div>
+        <span class="model-state">检测中</span>
+      </article>
+    </div>
+  </section>
+
+  <main id="mainContent" class="page-shell">
+    <section class="boundary-note" aria-label="审核边界说明">
+      <span class="boundary-icon" aria-hidden="true">!</span>
+      <div>
+        <strong>审核边界</strong>
+        <p>本系统核验二维码、证书版面与冻结台账之间的信息一致性，不代替发证机构官方真伪查询。配置模型后，审核所需的证书图像或差异文本会发送到所填公司接口；未接入官方验真接口前，真实性始终标记为“未验证”。</p>
+      </div>
+    </section>
+
+    <nav class="section-nav" aria-label="页面功能导航">
+      <a href="#createTitle"><span>01</span>创建审核</a>
+      <a href="#apiSettings"><span>02</span>API 设置</a>
+      <a href="#historySection"><span>03</span>历史批次</a>
+      <a href="#workspace"><span>04</span>审核结果</a>
+    </nav>
+
+    <section class="card create-card" aria-labelledby="createTitle">
+      <div class="section-head">
+        <div>
+          <span class="section-index">01</span>
+          <div>
+            <p class="eyebrow">创建审核任务</p>
+            <h2 id="createTitle">新建审核批次</h2>
+          </div>
+        </div>
+        <p id="capabilityText" class="section-help">正在读取本机审核能力…</p>
+      </div>
+
+      <div class="upload-grid">
+        <label class="dropzone" id="dropzone" tabindex="0">
+          <input id="fileInput" type="file" multiple accept=".pdf,.zip,application/pdf,application/zip">
+          <span class="upload-symbol" aria-hidden="true">↑</span>
+          <strong>拖入 PDF 或 ZIP，或点击选择文件</strong>
+          <small>可多选；ZIP 将执行路径、CRC 与压缩安全检查</small>
+        </label>
+
+        <div class="ledger-box">
+          <div class="ledger-copy">
+            <span class="file-type" aria-hidden="true">台账</span>
+            <div>
+              <strong>冻结台账快照</strong>
+              <small>可选，支持 JSON 或 CSV</small>
+            </div>
+          </div>
+          <label class="secondary-button file-button">
+            <input id="ledgerInput" type="file" accept=".json,.csv,application/json,text/csv">
+            选择台账
+          </label>
+          <label class="secondary-button file-button">
+            <input id="folderInput" type="file" multiple webkitdirectory directory accept=".pdf,application/pdf">
+            选择证书文件夹
+          </label>
+          <p id="ledgerName" class="selected-ledger">未选择台账，仍可进行证书内部一致性审核</p>
+        </div>
+      </div>
+
+      <div id="preflight" class="preflight hidden" aria-live="polite">
+        <div class="preflight-head">
+          <strong>待导入文件</strong>
+          <span id="selectionSummary">0 个文件</span>
+        </div>
+        <ul id="fileList" class="file-list"></ul>
+      </div>
+
+      <div class="form-actions">
+        <button id="startButton" class="primary-button" type="button" disabled>开始智能审核</button>
+        <button id="clearButton" class="text-button" type="button" disabled>清空选择</button>
+        <p class="privacy-copy">原始证书按 SHA-256 只读保存；系统不会回写质检数智平台。</p>
+      </div>
+    </section>
+
+    <section id="apiSettings" class="card api-settings-card" aria-labelledby="apiSettingsTitle">
+      <div class="section-head api-settings-head">
+        <div>
+          <span class="section-index">02</span>
+          <div>
+            <p class="eyebrow">模型接口管理</p>
+            <h2 id="apiSettingsTitle">API 设置</h2>
+          </div>
+        </div>
+        <p class="section-help">只配置当前接口真正支持的基础地址、API Key 和模型名称。保存后立即生效。</p>
+      </div>
+
+      <div class="security-note">
+        <span aria-hidden="true">🔒</span>
+        <div>
+          <strong>密钥不会保存到浏览器、源码或 SQLite</strong>
+          <p id="settingsStorageText">API Key 使用 Windows 当前用户 DPAPI 加密后保存在本机；页面只显示“已配置”，不会回显原文。</p>
+        </div>
+      </div>
+
+      <form id="apiSettingsForm" class="api-settings-form">
+        <div class="provider-config-grid">
+          <article class="provider-config" data-provider-card="qwen">
+            <div class="provider-config-head">
+              <div><span class="provider-order">视觉</span><h3>千问图像识别</h3></div>
+              <span id="qwenConfigState" class="config-state">读取中</span>
+            </div>
+            <p class="provider-purpose">识别证书版面、扫描页、印章与签名等图像信息。</p>
+            <label class="settings-field">
+              <span>API 基础地址</span>
+              <input id="qwenBaseUrl" type="url" inputmode="url" maxlength="2048" required placeholder="https://…/v1" autocomplete="url">
+              <small>系统固定调用该地址下的 <code>/chat/completions</code>。</small>
+            </label>
+            <label class="settings-field">
+              <span>模型名称</span>
+              <input id="qwenModel" type="text" maxlength="200" required spellcheck="false" autocomplete="off">
+            </label>
+            <label class="settings-field">
+              <span>API Key</span>
+              <span class="secret-input">
+                <input id="qwenApiKey" type="password" maxlength="4096" spellcheck="false" autocomplete="new-password" placeholder="留空则保持现有密钥">
+                <button type="button" class="secret-toggle" data-key-toggle="qwenApiKey" aria-label="显示或隐藏千问API Key">显示</button>
+              </span>
+            </label>
+            <label class="clear-key"><input id="qwenClearKey" type="checkbox"> 清除已保存的千问密钥</label>
+            <div class="provider-test-row">
+              <button class="secondary-button test-provider-button" type="button" data-provider-test="qwen">测试连接</button>
+              <span id="qwenTestResult" class="inline-feedback" aria-live="polite"></span>
+            </div>
+          </article>
+
+          <article class="provider-config" data-provider-card="glm">
+            <div class="provider-config-head">
+              <div><span class="provider-order">主审</span><h3>GLM 文本分析</h3></div>
+              <span id="glmConfigState" class="config-state">读取中</span>
+            </div>
+            <p class="provider-purpose">分析规则无法确定的文本差异，并输出风险与理由。</p>
+            <label class="settings-field">
+              <span>API 基础地址</span>
+              <input id="glmBaseUrl" type="url" inputmode="url" maxlength="2048" required placeholder="https://…/v1" autocomplete="url">
+              <small>系统固定调用该地址下的 <code>/chat/completions</code>。</small>
+            </label>
+            <label class="settings-field">
+              <span>模型名称</span>
+              <input id="glmModel" type="text" maxlength="200" required spellcheck="false" autocomplete="off">
+            </label>
+            <label class="settings-field">
+              <span>API Key</span>
+              <span class="secret-input">
+                <input id="glmApiKey" type="password" maxlength="4096" spellcheck="false" autocomplete="new-password" placeholder="留空则保持现有密钥">
+                <button type="button" class="secret-toggle" data-key-toggle="glmApiKey" aria-label="显示或隐藏GLM API Key">显示</button>
+              </span>
+            </label>
+            <label class="clear-key"><input id="glmClearKey" type="checkbox"> 清除已保存的 GLM 密钥</label>
+            <div class="provider-test-row">
+              <button class="secondary-button test-provider-button" type="button" data-provider-test="glm">测试连接</button>
+              <span id="glmTestResult" class="inline-feedback" aria-live="polite"></span>
+            </div>
+          </article>
+        </div>
+
+        <details class="arbiter-settings">
+          <summary><span>DeepSeek 异构仲裁设置（高风险差异时使用）</span><span id="deepseekConfigState" class="config-state">读取中</span></summary>
+          <div class="arbiter-fields">
+            <label class="settings-field"><span>API 基础地址</span><input id="deepseekBaseUrl" type="url" inputmode="url" maxlength="2048" required autocomplete="url"></label>
+            <label class="settings-field"><span>模型名称</span><input id="deepseekModel" type="text" maxlength="200" required spellcheck="false" autocomplete="off"></label>
+            <label class="settings-field"><span>API Key</span><span class="secret-input"><input id="deepseekApiKey" type="password" maxlength="4096" spellcheck="false" autocomplete="new-password" placeholder="留空则保持现有密钥"><button type="button" class="secret-toggle" data-key-toggle="deepseekApiKey" aria-label="显示或隐藏DeepSeek API Key">显示</button></span></label>
+            <label class="clear-key"><input id="deepseekClearKey" type="checkbox"> 清除已保存的 DeepSeek 密钥</label>
+            <div class="provider-test-row"><button class="secondary-button test-provider-button" type="button" data-provider-test="deepseek">测试连接</button><span id="deepseekTestResult" class="inline-feedback" aria-live="polite"></span></div>
+          </div>
+        </details>
+
+        <div class="settings-actions">
+          <div><strong id="apiSettingsFeedback" aria-live="polite">尚未修改</strong><small>修改密钥时输入新值；不修改时保持输入框为空。</small></div>
+          <button id="saveApiSettingsButton" class="primary-button" type="submit">保存 API 设置</button>
+        </div>
+      </form>
+    </section>
+
+    <section id="historySection" class="card history-card hidden" aria-labelledby="historyTitle">
+      <div class="history-head">
+        <div class="history-title-group">
+          <span class="section-index">03</span>
+          <div>
+            <p class="eyebrow">本机审核记录</p>
+            <h2 id="historyTitle">历史批次</h2>
+          </div>
+        </div>
+        <button id="refreshHistoryButton" class="secondary-button" type="button">刷新历史</button>
+      </div>
+      <p class="history-help">批次及审核证据保存在本机；选择一项可恢复上次查看进度。</p>
+      <div id="historyList" class="history-list" role="list"></div>
+    </section>
+
+    <section id="workspace" class="workspace hidden" aria-labelledby="workspaceTitle">
+      <section class="card batch-overview">
+        <div class="section-head batch-head">
+          <div>
+            <span class="section-index">04</span>
+            <div>
+              <p class="eyebrow">批次总览</p>
+              <h2 id="workspaceTitle">审核进度</h2>
+              <p id="batchIdentity" class="batch-identity">批次 —</p>
+            </div>
+          </div>
+          <div class="export-actions" aria-label="导出批次结果">
+            <a id="csvExport" class="secondary-button" href="#" download>导出 CSV</a>
+            <a id="jsonExport" class="secondary-button" href="#" download>导出 JSON</a>
+            <a id="auditExport" class="primary-button compact" href="#" download>下载审计包</a>
+          </div>
+        </div>
+
+        <div class="progress-block">
+          <div class="progress-copy">
+            <div><strong id="batchStatus">准备中</strong><span id="batchStage">正在创建批次</span></div>
+            <div class="progress-meta"><span id="lastUpdated">等待首次刷新</span><strong id="progressValue">0%</strong></div>
+          </div>
+          <div class="progress-track" role="progressbar" aria-label="批次处理进度" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+            <span id="progressBar"></span>
+          </div>
+        </div>
+
+        <div id="summaryCards" class="summary-grid" aria-live="polite"></div>
+      </section>
+
+      <section class="card review-workbench" aria-labelledby="recordsTitle">
+        <div class="workbench-toolbar">
+          <div>
+            <p class="eyebrow">证书清单</p>
+            <h2 id="recordsTitle">审核记录</h2>
+          </div>
+          <div class="toolbar-controls">
+            <label class="search-box">
+              <span class="sr-only">搜索证书</span>
+              <input id="searchInput" type="search" placeholder="搜索器具、证书号或文件名">
+            </label>
+            <button id="refreshButton" class="icon-button" type="button" title="刷新批次" aria-label="刷新批次">↻</button>
+          </div>
+        </div>
+
+        <div id="filterBar" class="filter-bar" role="group" aria-label="按审核状态筛选">
+          <button class="filter-button is-active" type="button" data-filter="ALL" aria-pressed="true">全部 <span>0</span></button>
+          <button class="filter-button" type="button" data-filter="PASS" aria-pressed="false">通过 <span>0</span></button>
+          <button class="filter-button" type="button" data-filter="REVIEW" aria-pressed="false">待复核 <span>0</span></button>
+          <button class="filter-button" type="button" data-filter="FAIL" aria-pressed="false">不通过 <span>0</span></button>
+          <button class="filter-button" type="button" data-filter="PROCESSING" aria-pressed="false">处理中 <span>0</span></button>
+        </div>
+
+        <div class="workbench-layout">
+          <div class="record-list-pane">
+            <div class="table-wrap">
+              <table class="records-table">
+                <thead>
+                  <tr>
+                    <th scope="col">序号</th>
+                    <th scope="col">器具 / 证书</th>
+                    <th scope="col">发证机构</th>
+                    <th scope="col">风险</th>
+                    <th scope="col">状态</th>
+                    <th scope="col"><span class="sr-only">操作</span></th>
+                  </tr>
+                </thead>
+                <tbody id="recordRows"></tbody>
+              </table>
+            </div>
+            <div id="emptyRecords" class="empty-state hidden">
+              <span aria-hidden="true">⌕</span>
+              <strong>没有符合条件的证书</strong>
+              <p>可调整筛选条件或等待批次继续处理。</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="detailPanel" class="card detail-panel hidden" aria-labelledby="detailTitle" tabindex="-1">
+        <div class="detail-header">
+          <div>
+            <p class="eyebrow">证书证据链</p>
+            <div class="detail-title-line">
+              <h2 id="detailTitle">证书详情</h2>
+              <span id="detailStatus" class="status-badge is-neutral">—</span>
+            </div>
+            <p id="detailMeta" class="detail-meta"></p>
+          </div>
+          <div class="detail-actions">
+            <button id="retryButton" class="secondary-button" type="button">重新处理</button>
+            <button id="closeDetailButton" class="icon-button" type="button" aria-label="关闭证书详情">×</button>
+          </div>
+        </div>
+
+        <div class="detail-grid">
+          <section class="evidence-preview" aria-labelledby="previewTitle">
+            <div class="subsection-title">
+              <h3 id="previewTitle">PDF 证据预览</h3>
+              <span id="pageIndicator">原始文件</span>
+            </div>
+            <div id="previewFrame" class="preview-frame"></div>
+          </section>
+
+          <section class="decision-rail" aria-label="审核结论与模型意见">
+            <div class="decision-summary">
+              <span>当前审核结论</span>
+              <strong id="decisionText">等待处理</strong>
+              <p id="decisionReason">系统正在汇总证据。</p>
+            </div>
+            <div id="modelDecisions" class="model-decisions"></div>
+          </section>
+        </div>
+
+        <section class="evidence-section" aria-labelledby="fieldEvidenceTitle">
+          <div class="subsection-title">
+            <h3 id="fieldEvidenceTitle">关键字段三方核验</h3>
+            <span>二维码 · 版面识别 · 冻结台账</span>
+          </div>
+          <div id="fieldMatrix" class="field-matrix"></div>
+        </section>
+
+        <section class="comparison-section" aria-labelledby="comparisonTitle">
+          <div class="subsection-title">
+            <h3 id="comparisonTitle">规则比较结果</h3>
+            <span id="comparisonSummary">—</span>
+          </div>
+          <div id="comparisonList" class="comparison-list"></div>
+        </section>
+
+        <section id="reviewHistorySection" class="review-history-section hidden" aria-labelledby="reviewHistoryTitle">
+          <div class="subsection-title">
+            <h3 id="reviewHistoryTitle">人工复核版本</h3>
+            <span>保留每次决定和人工修正，不覆盖机器原始证据</span>
+          </div>
+          <div id="reviewHistoryList" class="review-history-list"></div>
+        </section>
+
+        <section id="reviewSection" class="review-section hidden" aria-labelledby="reviewTitle">
+          <div class="review-copy">
+            <p class="eyebrow">人工复核</p>
+            <h3 id="reviewTitle">提交最终审核决定</h3>
+            <p>人工决定会生成新的审计版本，不覆盖模型原始结果。</p>
+          </div>
+          <form id="reviewForm" class="review-form">
+            <fieldset>
+              <legend>复核结论</legend>
+              <label><input type="radio" name="decision" value="PASS" required> 确认通过</label>
+              <label><input type="radio" name="decision" value="FAIL" required> 确认不通过</label>
+              <label><input type="radio" name="decision" value="NEEDS_EVIDENCE" required> 证据不足</label>
+            </fieldset>
+            <label class="form-field">
+              <span>复核说明 <b aria-hidden="true">*</b></span>
+              <textarea id="reviewComment" rows="3" maxlength="1000" required placeholder="说明判定依据、核对位置或后续处理建议"></textarea>
+            </label>
+            <label class="form-field">
+              <span>修正字段（可选 JSON）</span>
+              <textarea id="correctedFields" rows="3" spellcheck="false" placeholder='例如：{"serial_number":"3TA000007"}'></textarea>
+              <small>仅填写经人工确认需要修正的字段，提交后将作为新版本保存。</small>
+            </label>
+            <div class="review-submit-row">
+              <span id="reviewTaskMeta" class="review-task-meta"></span>
+              <button id="submitReviewButton" class="danger-button" type="submit">提交人工决定</button>
+            </div>
+          </form>
+        </section>
+      </section>
+    </section>
+  </main>
+
+  <div id="toastRegion" class="toast-region" aria-live="polite" aria-atomic="true"></div>
+
+  <footer class="app-footer">
+    <span>外检计量证书智能审核系统</span>
+    <span>全链路留痕 · 结果可追溯 · 处置需人工确认</span>
+  </footer>
+
+  <script src="/static/app.js" defer></script>
+</body>
+</html>
