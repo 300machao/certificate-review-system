@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import socket
 from pathlib import Path
 from urllib.request import urlopen
 
@@ -40,6 +41,33 @@ def test_local_server_starts_on_loopback_and_stops() -> None:
     finally:
         server.stop()
     assert server.running is False
+
+
+def test_network_guard_allows_only_port_bound_by_current_test() -> None:
+    listener = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    accepted = None
+    try:
+        listener.bind(("127.0.0.1", 0))
+        listener.listen(1)
+        port = listener.getsockname()[1]
+        client.connect(("127.0.0.1", port))
+        accepted, _ = listener.accept()
+        assert accepted.getpeername()[0] == "127.0.0.1"
+    finally:
+        if accepted is not None:
+            accepted.close()
+        client.close()
+        listener.close()
+
+
+def test_network_guard_rejects_formal_service_port() -> None:
+    connection = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    try:
+        with pytest.raises(AssertionError, match="8766"):
+            connection.connect(("127.0.0.1", 8766))
+    finally:
+        connection.close()
 
 
 def test_desktop_bridge_uses_native_save_dialog(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

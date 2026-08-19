@@ -3,6 +3,7 @@ from __future__ import annotations
 import io
 import threading
 import time
+import uuid
 import zipfile
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
@@ -11,6 +12,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.api import app, service
+from app.models import AuthenticityResult, Issue, ReviewRecord
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -52,6 +54,65 @@ def test_missing_ledger_never_auto_passes_and_pdf_is_same_origin_previewable() -
     assert preview.headers["x-frame-options"] == "SAMEORIGIN"
     assert "inline" in preview.headers["content-disposition"]
     assert preview.content.startswith(b"%PDF-")
+
+
+def test_detail_api_exposes_nested_authenticity_status_without_masking() -> None:
+    client = TestClient(app)
+    batch_id = str(uuid.uuid4())
+    record = ReviewRecord(
+        record_id=str(uuid.uuid4()),
+        filename="synthetic-verification-failure.pdf",
+        sha256="a" * 64,
+        size_bytes=123,
+        file_type="pdf",
+        status="HUMAN_REVIEW",
+        workflow_state="HUMAN_REVIEW",
+        authenticity=AuthenticityResult(
+            status="VERIFICATION_FAILED",
+            method="issuer_official_api",
+            evidence=["合成官方验真失败证据"],
+            explanation="合成验真失败，仅供测试。",
+        ),
+        issues=[Issue(
+            "AUTHENTICITY_VERIFICATION_FAILED",
+            "error",
+            "真实性验真失败",
+            "合成验真失败，仅供测试。",
+        )],
+    )
+    service.db.create_batch(batch_id, str(uuid.uuid4()), status="COMPLETED")
+    service.db.add_certificate(
+        batch_id,
+        record.filename,
+        record.sha256,
+        record.size_bytes,
+        record.file_type,
+        certificate_id=record.record_id,
+        status=record.status,
+        metadata={"review": record.to_dict()},
+    )
+
+    response = client.get(f"/api/certificates/{record.record_id}")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["authenticity"]["status"] == "VERIFICATION_FAILED"
+    assert payload["authenticity_status"] == "VERIFICATION_FAILED"
+    assert payload["certificate"]["authenticity"]["status"] == "VERIFICATION_FAILED"
+    assert payload["certificate"]["authenticity_status"] == "VERIFICATION_FAILED"
+
+
+def test_page_loads_summary_helper_before_application_script() -> None:
+    client = TestClient(app)
+
+    page = client.get("/")
+    helper = client.get("/static/review-summary.js")
+    application = client.get("/static/app.js")
+
+    assert page.status_code == helper.status_code == application.status_code == 200
+    assert page.text.index("/static/review-summary.js") < page.text.index("/static/app.js")
+    assert "countActiveConcerns" in helper.text
+    assert "CertificateReviewSummary" in application.text
 
 
 def test_human_review_is_versioned_and_audit_package_contains_original() -> None:
@@ -156,6 +217,25 @@ def test_retry_reservation_is_released_after_worker_failure(monkeypatch) -> None
 
     replacement = service.reserve_certificate_retry(certificate_id)
     assert service.cancel_certificate_retry_reservation(certificate_id, replacement) is True
+
+
+def test_repeated_certificate_retry_does_not_accumulate_active_issues() -> None:
+    client = TestClient(app)
+    batch = _upload_one(client)
+    certificate_id = batch["records"][0]["record_id"]
+    expected_codes = sorted(
+        item["code"]
+        for item in client.get(f"/api/certificates/{certificate_id}").json()["issues"]
+    )
+    assert expected_codes
+
+    for _ in range(2):
+        response = client.post(f"/api/certificates/{certificate_id}/retry")
+        assert response.status_code == 202
+        detail = client.get(f"/api/certificates/{certificate_id}").json()
+        actual_codes = [item["code"] for item in detail["issues"]]
+        assert sorted(actual_codes) == expected_codes
+        assert len(actual_codes) == len(set(actual_codes))
 
 
 def test_batch_retry_uses_one_reservation_and_resets_all_records(monkeypatch) -> None:
