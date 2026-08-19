@@ -8,6 +8,7 @@ import pytest
 
 from app.config import AppConfig, load_config
 from app.ingest import FrozenLedgerRow, IngestResult, ingest_sources
+from app.models import AuthenticityResult, Issue, ReviewRecord
 from app.service import BatchReviewService, prepare_local_files
 
 
@@ -81,6 +82,61 @@ def test_successful_certificate_retry_reaggregates_partial_batch(
         assert service.db.get_batch(batch.batch_id)["status"] == "COMPLETED"
     finally:
         service.close()
+
+
+def test_review_snapshot_survives_temporary_sqlite_round_trip(tmp_path: Path) -> None:
+    config = AppConfig(model_mode="disabled")
+    first = BatchReviewService(config, root=tmp_path)
+    batch_id = "synthetic-persistence-batch"
+    record = ReviewRecord(
+        record_id="synthetic-persistence-certificate",
+        filename="synthetic-persistence.pdf",
+        sha256="b" * 64,
+        size_bytes=456,
+        file_type="pdf",
+        status="HUMAN_REVIEW",
+        workflow_state="HUMAN_REVIEW",
+        authenticity=AuthenticityResult(
+            status="VERIFICATION_FAILED",
+            method="issuer_official_api",
+            evidence=["合成持久化验真证据"],
+            explanation="合成持久化测试。",
+        ),
+        issues=[Issue(
+            "AUTHENTICITY_VERIFICATION_FAILED",
+            "error",
+            "真实性验真失败",
+            "合成持久化测试。",
+        )],
+    )
+    try:
+        first.db.create_batch(batch_id, "synthetic-request", status="COMPLETED")
+        first.db.add_certificate(
+            batch_id,
+            record.filename,
+            record.sha256,
+            record.size_bytes,
+            record.file_type,
+            certificate_id=record.record_id,
+            status=record.status,
+            metadata={"review": record.to_dict()},
+        )
+        first._store_record_snapshot(record)
+    finally:
+        first.close()
+
+    reopened = BatchReviewService(config, root=tmp_path)
+    try:
+        detail = reopened.get_certificate_detail(record.record_id)
+        assert detail is not None
+        assert detail["authenticity"]["status"] == "VERIFICATION_FAILED"
+        assert detail["authenticity_status"] == "VERIFICATION_FAILED"
+        assert [item["code"] for item in detail["issues"]] == [
+            "AUTHENTICITY_VERIFICATION_FAILED"
+        ]
+        assert reopened.db.path.is_file()
+    finally:
+        reopened.close()
 
 
 def run_batch(paths: list[Path]):

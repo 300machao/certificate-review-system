@@ -1099,10 +1099,8 @@ function renderComparisons(detail) {
   list.replaceChildren();
   const comparisons = asArray(detail.comparisons);
   const issues = asArray(detail.issues);
-  let mismatches = 0;
   comparisons.forEach((item) => {
     const status = firstDefined(item.status, item.result, item.decision, "UNCERTAIN");
-    if (comparisonClass(status) === "is-mismatch") mismatches += 1;
     const block = createElement("article", `comparison-item ${comparisonClass(status)}`);
     const field = createElement("strong", "", fieldLabel(firstDefined(item.field, item.field_name, "字段比较")));
     const values = createElement("div", "comparison-values");
@@ -1117,7 +1115,6 @@ function renderComparisons(detail) {
   });
   issues.forEach((issue) => {
     const severity = String(firstDefined(issue.severity, issue.risk, "UNCERTAIN")).toUpperCase();
-    if (["ERROR", "HIGH", "CRITICAL"].includes(severity)) mismatches += 1;
     const css = ["ERROR", "HIGH", "CRITICAL"].includes(severity) ? "is-mismatch" : "is-uncertain";
     const block = createElement("article", `comparison-item ${css}`);
     block.append(
@@ -1130,8 +1127,9 @@ function renderComparisons(detail) {
   if (!comparisons.length && !issues.length) {
     list.append(createElement("p", "empty-state", "暂无规则比较结果，可能仍在处理中。"));
   }
-  $("comparisonSummary").textContent = comparisons.length || issues.length
-    ? `${comparisons.length} 项比较 · ${mismatches} 项需关注`
+  const concerns = globalThis.CertificateReviewSummary?.countActiveConcerns(detail) ?? 0;
+  $("comparisonSummary").textContent = comparisons.length || issues.length || concerns
+    ? `${comparisons.length} 项比较 · ${concerns} 个需关注问题（按字段/问题去重）`
     : "等待规则引擎输出";
 }
 

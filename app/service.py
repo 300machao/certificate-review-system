@@ -15,6 +15,7 @@ import uuid
 import zipfile
 from collections import OrderedDict, defaultdict, deque
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from dataclasses import asdict
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -602,8 +603,8 @@ class BatchReviewService:
                 extraction.text_pages, extraction.text_sources
             )
             extraction.fields = extracted_fields
-            legacy_status, legacy_issues, _ = self.rules.review(extraction, candidates)
-            del legacy_status
+            local_status, local_issues, _ = self.rules.review(extraction, candidates)
+            del local_status
             self.db.finish_extraction_run(
                 local_run["id"], "SUCCEEDED",
                 latency_ms=round((time.perf_counter() - local_started) * 1000),
@@ -622,7 +623,7 @@ class BatchReviewService:
 
         record.fields = extracted_fields
         record.qr_codes = extraction.qr_codes
-        record.issues = legacy_issues
+        record.issues = local_issues
         record.authenticity = self.authenticity.verify(path)
         record.metadata.update(extraction.metadata)
         record.metadata.update({
@@ -630,9 +631,14 @@ class BatchReviewService:
             "ocr_provider": self.ocr.name,
             "qwen_used": False,
             "authoritative_verification_used": self.authenticity.authoritative,
+            # Preserve the deterministic extraction-stage result as immutable
+            # review evidence.  record.issues is recalculated below and remains
+            # the only list of currently active issues.
+            "extraction_stage_issues": [asdict(issue) for issue in local_issues],
         })
         self._persist_fields(record.record_id, record.fields, local_run["id"])
 
+        vision_issues: list[Issue] = []
         qwen = self.providers["qwen"]
         if self.model_mode in ACTIVE_MODEL_MODES and qwen.configured and path.suffix.lower() == ".pdf":
             vision_run = self.db.create_extraction_run(
@@ -661,7 +667,7 @@ class BatchReviewService:
                 )
                 self._persist_fields(record.record_id, vision.fields, vision_run["id"])
                 for warning in vision.warnings:
-                    record.issues.append(Issue(
+                    vision_issues.append(Issue(
                         code="QWEN_VISION_WARNING", severity="review", title="千问视觉识别提示",
                         detail=warning,
                     ))
@@ -672,10 +678,19 @@ class BatchReviewService:
                     error=self._safe_error(exc),
                 )
                 record.metadata["qwen_error"] = self._safe_error(exc)
-                record.issues.append(Issue(
+                vision_issues.append(Issue(
                     code="QWEN_VISION_FAILED", severity="review", title="千问视觉识别失败",
                     detail="已转人工复核；不会因模型失败自动通过。",
                 ))
+
+        # Qwen may have supplied fields that the deterministic pass could not
+        # extract.  Re-run every applicable rule against the merged final field
+        # set so resolved REQUIRED_FIELD_MISSING findings are not left active,
+        # while extraction-stage findings remain available in metadata.
+        extraction.fields = record.fields
+        final_rule_status, final_rule_issues, _ = self.rules.review(extraction, candidates)
+        del final_rule_status
+        record.issues = [*final_rule_issues, *vision_issues]
 
         self._set_state(record, "COMPARING")
         qr_fields = self._flatten_qr_fields(record.qr_codes)
@@ -768,6 +783,7 @@ class BatchReviewService:
                 code="DUPLICATE_FILE", severity="review", title="批次内重复内容",
                 detail=f"SHA-256 与记录 {record.duplicate_of} 相同；业务附件保留，识别缓存复用。",
             ))
+        self._sync_frozen_ledger_issue(record)
         if missing_document:
             record.issues.append(Issue(
                 code="CRITICAL_FIELD_MISSING", severity="review", title="关键字段缺失",
@@ -823,6 +839,7 @@ class BatchReviewService:
                                 arbitration.decision == "INCONSISTENT"
                                 and arbitration.risk == "HIGH"
                                 and arbitration.confidence >= self.config.model_confidence_threshold
+                                and not self.auto_fail_blockers(record)
                             ):
                                 record.status = "AUTO_FAILED"
                                 record.workflow_state = "FINALIZED"
@@ -1048,6 +1065,9 @@ class BatchReviewService:
     ) -> list[str]:
         """Return fail-closed automatic-pass reasons; an empty list is required."""
         blockers: list[str] = []
+        if not record.ledger_fields:
+            blockers.append("frozen_ledger_missing")
+        blockers.extend(self._authenticity_auto_pass_blockers(record))
         by_field = {item["field"]: item for item in comparisons}
         for field in sorted(self._required_auto_pass_fields(record)):
             value = record.fields.get(field)
@@ -1091,6 +1111,31 @@ class BatchReviewService:
         if any(issue.severity in {"review", "error"} for issue in record.issues):
             blockers.append("review_or_error_issue")
         return list(dict.fromkeys(blockers))
+
+    @staticmethod
+    def auto_fail_blockers(record: ReviewRecord) -> list[str]:
+        """Return evidence gaps that forbid an automatic negative decision."""
+        if not record.ledger_fields:
+            return ["frozen_ledger_missing"]
+        return []
+
+    def _authenticity_auto_pass_blockers(self, record: ReviewRecord) -> list[str]:
+        """Require complete authoritative authenticity evidence before auto-pass."""
+        blockers: list[str] = []
+        if not bool(getattr(self.authenticity, "authoritative", False)):
+            blockers.append("authenticity_provider_not_authoritative")
+        if not bool(record.metadata.get("authoritative_verification_used")):
+            blockers.append("authoritative_authenticity_not_used")
+        status = str(record.authenticity.status or "UNVERIFIED").strip().upper()
+        if status != "VERIFIED":
+            blockers.append(f"authenticity_{status.lower()}")
+        method = str(record.authenticity.method or "").strip().casefold()
+        if (
+            not record.authenticity.evidence
+            or method in {"", "none", "local_evidence_only", "pdf_signature_presence"}
+        ):
+            blockers.append("authoritative_authenticity_evidence_incomplete")
+        return blockers
 
     @staticmethod
     def _required_auto_pass_fields(record: ReviewRecord) -> set[str]:
@@ -1153,7 +1198,14 @@ class BatchReviewService:
     def _reuse_cached_result(self, source: ReviewRecord, target: ReviewRecord) -> None:
         target.fields = copy.deepcopy(source.fields)
         target.qr_codes = copy.deepcopy(source.qr_codes)
-        target.issues = copy.deepcopy(source.issues)
+        # Cache document extraction evidence only.  The target has an independent
+        # frozen-ledger snapshot, so ledger-dependent findings must never cross
+        # the SHA-256 cache boundary.
+        target.issues = [
+            copy.deepcopy(issue)
+            for issue in source.issues
+            if issue.code != "FROZEN_LEDGER_MISSING"
+        ]
         target.authenticity = copy.deepcopy(source.authenticity)
         target.metadata.update(copy.deepcopy(source.metadata))
         target.metadata["cache_hit"] = True
@@ -1184,11 +1236,24 @@ class BatchReviewService:
                 ledger_value=target.ledger_fields.get(item["field"], item.get("ledger_value")),
                 risk=item.get("severity"), basis="sha256-cache-v1",
             )
+        self._sync_frozen_ledger_issue(target)
         target.issues.insert(0, Issue(
             code="DUPLICATE_FILE", severity="review", title="重复附件已复用识别缓存",
             detail=f"与记录 {target.duplicate_of} 内容相同；附件仍作为独立业务记录保留。",
         ))
         self._create_or_reuse_review_task(target)
+
+    @staticmethod
+    def _sync_frozen_ledger_issue(record: ReviewRecord) -> None:
+        """Regenerate the ledger-presence issue from this record's own snapshot."""
+        record.issues = [
+            issue for issue in record.issues if issue.code != "FROZEN_LEDGER_MISSING"
+        ]
+        if not record.ledger_fields:
+            record.issues.append(Issue(
+                code="FROZEN_LEDGER_MISSING", severity="review", title="缺少冻结台账证据",
+                detail="没有匹配到该证书的冻结台账行；模型意见不能替代权威台账证据。",
+            ))
 
     def _persist_fields(
         self, certificate_id: str, fields: dict[str, FieldValue], run_id: str
@@ -1409,6 +1474,12 @@ class BatchReviewService:
             return None
         certificate_row = raw["certificate"]
         review_data = (certificate_row.get("metadata") or {}).get("review") or {}
+        authenticity = review_data.get("authenticity") or {}
+        authenticity_status = str(
+            authenticity.get("status")
+            or certificate_row.get("authenticity_status")
+            or "UNVERIFIED"
+        ).strip().upper()
         certificate = dict(review_data)
         certificate.update({
             "id": certificate_id,
@@ -1419,6 +1490,8 @@ class BatchReviewService:
             "page_count": certificate_row.get("page_count"),
             "status": certificate_row["status"],
             "metadata": certificate_row.get("metadata") or {},
+            "authenticity": authenticity,
+            "authenticity_status": authenticity_status,
         })
         snapshots = raw.get("ledger_snapshots") or []
         open_tasks = [task for task in raw.get("review_tasks", []) if task.get("status") == "OPEN"]
@@ -1455,7 +1528,8 @@ class BatchReviewService:
             "current_cycle_started_at": current_cycle_started_at,
             "review_task": open_tasks[-1] if open_tasks else None,
             "pdf_preview_url": f"/api/certificates/{certificate_id}/file",
-            "authenticity_status": "UNVERIFIED",
+            "authenticity": authenticity,
+            "authenticity_status": authenticity_status,
         }
 
     def certificate_file(self, certificate_id: str) -> tuple[Path, str]:
